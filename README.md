@@ -14,6 +14,9 @@
 
 项目需要 jdk，理论上说 1.6+  即可，我个人用的是 Java 8 。
 
+github 现在不提供 release 下载服务了？如果要自己打包的话，可以执行 `lein ring uberjar` ，切记
+不要用 lein 自己的 ubuerjar 命令。
+
 如果使用 jar ，可以运行 `java -jar arithmetic-1.0.0-standalone.jar` 启动，它会监听本机所有 ip，
 默认端口是 3001 ，所以给小朋友一个平板或者手机，我就可以开着电脑做我的事情去了。
 
