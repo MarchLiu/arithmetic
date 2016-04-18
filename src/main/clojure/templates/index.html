@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>口算练习</title>
+
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="/static/bootstrap/css/bootstrap.min.css">
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.2/html5shiv.js"></script>
+    <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+    <style type="text/css">
+    </style>
+  </head>
+  <body>
+    <div class="container" id="page">
+      <h1>算术挑战</h1>
+      <h2>历史记录</h2>
+      <div id="history" class="panel panel-default"></div>
+      <div class="row panel panel-default form-group" id="panel">
+        <div class="panel-heading" for="answer">请回答问题：</div>
+          <div class="panel-body input-group">
+            <span class="input-group-addon" id="question">这里是题目=</span>
+            <input type="text" class="form-control" id="answer"
+                   aria-describedby="question"/>
+            <div class="input-group-addon" id="check-btn">?</div>
+          </div>
+        <div/>
+        </div>
+          <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+        <script src="/static/jquery.min.js"></script>
+        <!-- Include all compiled plugins (below), or include individual files as needed -->
+        <script src="/static/bootstrap/js/bootstrap.min.js"></script>
+        <script>
+        // 加载新习题
+        function askNew(){
+          $.get({
+            url: "/api/questions/ask",
+            success: function(result) {
+              var data = $.parseJSON(result)
+              var q = $("#question")
+              q.text(data.description+"=")
+              q.data("qid", data["id"])
+            }
+          })
+        }
+        // 刷新历史记录
+        function refreshHistory(){
+          $.getJSON({
+            url: "/api/questions/list",
+            success: function(result) {
+              $("#history").html("")
+              $.each(result, function(index, value){
+                var item = $("<p>"+value.description+"</p>")
+                item.data("qid", value["id"])
+                if(value.finished == null){
+                  item.addClass("bg-warning")
+                }else{
+                  item.addClass("bg-success")
+                }
+                $("#history").append(item)
+              })
+            }
+          })
+        }
+        // 将答案发送到服务器，检查结果
+        function check() {
+          $.post({url:"/api/question/"+$("#question").data("qid")+"/answer",
+                  data: {result: $("#answer").val()},
+                  success: function (result) {
+              var data=$.parseJSON(result)
+              if (data.result == "ok") {
+                $("#panel").removeClass("has-error")
+                $("#answer").val("")
+                refreshHistory()
+                askNew()
+              } else {
+                $("#panel").removeClass("has-success").addClass("has-error")
+              }
+            },
+          })
+        }
+        $(document).ready(function() {
+          // 加载历史记录
+          refreshHistory()
+          // 加载新习题
+          askNew()
+
+          $("#answer").keypress(function(event){
+            // enter
+            if(event.which == 13) {
+              check()
+            }
+          })
+
+          $("#check-btn").click(function(event){
+            check()
+          })
+        })
+        </script>
+  </body>
+</html>
