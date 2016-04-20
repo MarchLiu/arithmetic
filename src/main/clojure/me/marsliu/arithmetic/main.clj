@@ -14,7 +14,10 @@
 
 ;; use 该文件时server会启动，可以在 repl 中用 (.start server)和
 ;; (.stop server) 手动控制。
-(def server (run-jetty #'app {:port 9080 :join? false}))
+(def server (run-jetty #'app {:port 9080
+                              :join? false
+                              :auto-reload true
+                              :auto-fresh true}))
 
 (defn restart-server []
     (.stop server)

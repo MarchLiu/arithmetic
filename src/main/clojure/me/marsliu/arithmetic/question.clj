@@ -7,8 +7,8 @@
             [ring.util.response :as response]
             [clojure.tools.logging :as log]
             [clojure.data.json :as json]
-            [clojure.java.jdbc :as jdbc]
-            [java-jdbc.sql :as sql]
+            [jdbc.core :as jdbc]
+            [sqlingvo.core :as sql]
             [me.marsliu.arithmetic.equation :as eqt]
             [me.marsliu.arithmetic.env :as env]))
 
@@ -17,6 +17,20 @@
 
 ;; 定义与sqlite匹配的日期字符串格式
 (def dt-formatter (ctf/formatter-local "yyyy-MM-dd HH:mm::ss"))
+
+(defn save-equation
+  "辅助方法，保存算式，返回 {:id id}。"
+  [equation description result]
+    (with-open [conn (jdbc/connection env/db)]
+      (->> (sql/insert env/db :exam []
+                       (sql/values {:equation (eqt/to-code equation)
+                                :description description
+                                :result result}))
+           sql/sql
+           (jdbc/execute conn))
+      (->> (sql/select env/db [(sql/as '(last_insert_rowid) :id)])
+           sql/sql
+           (jdbc/fetch-one conn))))
 
 (defn new-equation
   "根据环境设置构造一个算式，将其保存在数据库中，返回它的记录id，算式、文本和结果。"
@@ -30,38 +44,37 @@
     (let [t (eval equation)]
       (if (not= t result)
         (log/errorf "ploy %s create by %s but its result is %s" equation result t)))
-    (let [qid (-> (jdbc/insert! env/db
-                                :exam {:equation (eqt/to-code equation)
-                                       :description description
-                                       :result result})
-                  first
-                  (get (keyword "last_insert_rowid()")))]
+    (let [{qid :id} (save-equation equation description result)]
       {:id qid :description description :result result})))
 
 (defn give-me-one
   "如果 exam 中有没做完的习题，从中取一个返回，否则构造一个新习题。"
   []
-  (let [{c :c} (first (jdbc/query env/db ["select count(*) as c from exam"]))]
-    (if (= 0 c)
-      (new-equation)
-      (first (jdbc/query env/db ["select id, description, result from exam limit 1"])))))
+  (with-open [conn (jdbc/connection env/db)]
+    (let [{c :c} (jdbc/fetch-one conn ["select count(*) as c from exam"])]
+      (if (= 0 c)
+        (new-equation)
+        (jdbc/fetch-one conn ["select id, description, result from exam limit 1"])))))
 
 (defn answer
-  "发送问题答案到answer接口，返回判断。"
+  "发送问题答案到answer接口，返回判断。如果成功，将算式从exam表移到history表。"
   [id result]
-  (let [{r :result} (first (jdbc/query env/db ["select result from exam where id=?" id]))
-        a (Integer. result)]
-    (if (= r a)
-      (let [row (first
-                 (jdbc/query
-                  env/db
-                  ["select id, equation, description, result, created from exam where id=?" id]))]
-        (jdbc/insert! env/db
-                      :history
-                      (assoc row :finished (ctf/unparse dt-formatter (ctl/local-now))))
-        (jdbc/delete! env/db :exam ["id=?" id])
-        (json/write-str {:result :ok}))
-      (json/write-str {:result :error}))))
+  (with-open [conn (jdbc/connection env/db)]
+        (let [{r :result} (jdbc/fetch-one conn ["select result from exam where id=?" id])
+              a (Integer. result)]
+          (if (= r a)
+            (jdbc/atomic conn
+              (->> (sql/insert env/db :history [:id :equation :description :result :created]
+                               (sql/select env/db [:id :equation :description :result :created]
+                                           (sql/from :exam)
+                                           (sql/where '(= :id id))))
+                   sql/sql
+                   (jdbc/execute conn))
+              (->> (sql/delete env/db :exam (sql/where '(= :id id)))
+                   sql/sql
+                   (jdbc/execute conn))
+              (json/write-str {:result :ok}))
+            (json/write-str {:result :error})))))
 
 (defn questions
   "返回答卷历史的 JSON 形式。默认前一百条。"
@@ -69,19 +82,20 @@
   (let [page-number (Integer/parseInt page)
         offset (* page-number page-size)
         limit page-size
-        data (doall
-              (jdbc/query
-               env/db
-               ["select id, description, finished from history order by id limit ? offset ?"
-                limit offset]))]
+        data (with-open [conn (jdbc/connection env/db)]
+               (->> (sql/select env/db [:id :equation :description :result :created :finished]
+                                (sql/from :history)
+                                (sql/limit limit)
+                                (sql/offset offset))
+                    sql/sql
+                    (jdbc/fetch conn)))]
     (json/write-str data)))
 
 (defn count
   "返回日志计数，供翻页使用。"
   [request]
-  (let [rowset (doall
-                (jdbc/query
-                 env/db ["select count(*) from history where finished is not null"]))]
+  (let [rowset (with-open [conn (jdbc/connection env/db)]
+                 (jdbc/fetch conn ["select count(*) from history where finished is not null"]))]
     (json/write-str {:status :ok :result (first (first rowset))})))
 
 (defn ask
@@ -91,9 +105,8 @@
   [id]
   (if (empty? id)
     (json/write-str (give-me-one))
-    (let [data (first
-                (jdbc/query
-                 env/db
-                 ["select id, decription, result from exam where id=?" id]))]
+    (let [data (with-open [conn (jdbc/connection env/db)]
+                 (jdbc/fetch conn
+                             ["select id, decription, result from exam where id=?" id]))]
       (json/write-str data))))
   

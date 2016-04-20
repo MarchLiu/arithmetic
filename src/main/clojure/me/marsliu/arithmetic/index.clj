@@ -6,8 +6,6 @@
             [ring.util.response :as response]
             [clojure.tools.logging :as log]
             [clojure.data.json :as json]
-            [clojure.java.jdbc :as jdbc]
-            [java-jdbc.sql :as sql]
             [me.marsliu.arithmetic.equation :as eqt]
             [me.marsliu.arithmetic.env :as env]
             [me.marsliu.arithmetic.question :as q]))
