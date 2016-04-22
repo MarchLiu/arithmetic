@@ -7,6 +7,7 @@
                  [clj-time "0.8.0"]
 ;;                 [org.clojars.marsliu/clj-parsec "0.1.0"]
                  [ring "1.4.0"]
+                 [ring/ring-defaults "0.2.0"]
                  ;; [org.clojure/java.jdbc "0.6.0-alpha2"]
                  [funcool/clojure.jdbc "0.7.0"]
                  [javax.servlet/servlet-api "2.5"]

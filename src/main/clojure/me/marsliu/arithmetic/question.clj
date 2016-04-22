@@ -91,7 +91,7 @@
                     (jdbc/fetch conn)))]
     (json/write-str data)))
 
-(defn count
+(defn log-count
   "返回日志计数，供翻页使用。"
   [request]
   (let [rowset (with-open [conn (jdbc/connection env/db)]
